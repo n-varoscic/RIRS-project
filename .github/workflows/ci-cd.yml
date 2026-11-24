@@ -80,7 +80,7 @@ jobs:
         working-directory: BuildManager
         run: npm run build
 
-      # Zgrajen backend skupaj s package.json, da ga je mogoče zagnati brez ponovne gradnje
+      # Zgrajen backend skupaj s package.json in Dockerfile, da ga je mogoče zagnati brez ponovne gradnje
       - name: Shranitev builda (backend)
         uses: actions/upload-artifact@v7
         with:
@@ -89,6 +89,7 @@ jobs:
             backend/dist
             backend/package.json
             backend/package-lock.json
+            backend/Dockerfile
           if-no-files-found: error
 
       - name: Shranitev builda (frontend)
@@ -138,3 +139,61 @@ jobs:
             backend/coverage
             BuildManager/coverage
           if-no-files-found: error
+
+  deploy:
+    name: deploy
+    # Deploy teče samo ob pushu na main in šele, ko so lint, build in test uspeli
+    needs: [lint, build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Skrivnosti za objavo so v GitHub Environment production
+    environment: production
+    permissions:
+      contents: read
+      # Dovoljenje za objavo Docker slike v GitHub Container Registry
+      packages: write
+    env:
+      BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/buildmanager-backend
+    steps:
+      # Deploy uporabi artifacte iz joba build, zato se aplikacija ne gradi znova
+      - name: Prenos builda (frontend)
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend-dist
+
+      - name: Prenos builda (backend)
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-dist
+          path: backend-dist
+
+      - name: Namestitev Node.js (za Netlify CLI)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Objava frontenda na Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: >
+          npx --yes netlify-cli@27.16.2 deploy
+          --prod
+          --no-build
+          --dir frontend-dist
+          --site "$NETLIFY_SITE_ID"
+          --message "Commit ${{ github.sha }}"
+
+      - name: Prijava v GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Slika dobi dve oznaki: commit (za sledljivost) in latest (zadnja objavljena različica)
+      - name: Docker slika backenda
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            -t "$BACKEND_IMAGE:${{ github.sha }}" \
+            -t "$BACKEND_IMAGE:latest" \
+            backend-dist
+          docker push --all-tags "$BACKEND_IMAGE"
