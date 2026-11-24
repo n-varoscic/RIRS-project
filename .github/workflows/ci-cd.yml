@@ -78,6 +78,9 @@ jobs:
 
       - name: Build (frontend)
         working-directory: BuildManager
+        # Vite naslov objavljenega backenda vpiše v kodo ob gradnji (spremenljivka repozitorija)
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: npm run build
 
       # Zgrajen backend skupaj s package.json in Dockerfile, da ga je mogoče zagnati brez ponovne gradnje
@@ -197,3 +200,11 @@ jobs:
             -t "$BACKEND_IMAGE:latest" \
             backend-dist
           docker push --all-tags "$BACKEND_IMAGE"
+
+      # Render prenese pravkar objavljeno sliko tega commita in z njo zažene backend
+      - name: Objava backenda na Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          IMAGE_URL=$(jq -rn --arg image "$BACKEND_IMAGE:${{ github.sha }}" '$image | @uri')
+          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL&imgURL=$IMAGE_URL"
