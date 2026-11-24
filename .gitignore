@@ -5,6 +5,9 @@ node_modules/
 dist/
 build/
 
+# Poročila o pokritosti s testi
+coverage/
+
 # Okoljske spremenljivke
 .env
 

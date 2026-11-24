@@ -8,7 +8,7 @@ module.exports = defineConfig([
   // Zgrajena koda in samodejno ustvarjen Prisma odjemalec se ne preverjata
   globalIgnores(['dist', 'src/generated']),
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,mts}'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: { globals: globals.node },
   },
