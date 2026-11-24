@@ -7,6 +7,8 @@ import employeeRouter from "./routes/employeeRoute";
 import hourRouter from "./routes/hourRoute";
 import projectRouter from "./routes/projectRoute";
 
+const neuporabljenaSpremenljivka = "namerna napaka za demonstracijo CI";
+
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
