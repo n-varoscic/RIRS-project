@@ -1,0 +1,140 @@
+# CI/CD za BuildManager: lint, build in testi za backend in frontend
+name: CI/CD
+
+# Pipeline se zažene ob vsakem PR v main in ob vsakem pushu (mergu) na main
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Pipeline lahko kodo samo bere, spreminjati je ne more
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prenos kode
+        uses: actions/checkout@v7
+
+      - name: Namestitev Node.js in predpomnilnika paketov
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            BuildManager/package-lock.json
+
+      - name: Namestitev paketov (backend)
+        working-directory: backend
+        run: npm ci
+
+      - name: Namestitev paketov (frontend)
+        working-directory: BuildManager
+        run: npm ci
+
+      - name: Lint (backend)
+        working-directory: backend
+        run: npm run lint
+
+      - name: Lint (frontend)
+        working-directory: BuildManager
+        run: npm run lint
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prenos kode
+        uses: actions/checkout@v7
+
+      - name: Namestitev Node.js in predpomnilnika paketov
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            BuildManager/package-lock.json
+
+      - name: Namestitev paketov (backend)
+        working-directory: backend
+        run: npm ci
+
+      - name: Namestitev paketov (frontend)
+        working-directory: BuildManager
+        run: npm ci
+
+      - name: Build (backend)
+        working-directory: backend
+        # prisma generate zahteva naslov baze, čeprav se z njo ne poveže, zato zadošča lažen naslov
+        env:
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+        run: npm run build
+
+      - name: Build (frontend)
+        working-directory: BuildManager
+        run: npm run build
+
+      # Zgrajen backend skupaj s package.json, da ga je mogoče zagnati brez ponovne gradnje
+      - name: Shranitev builda (backend)
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-dist
+          path: |
+            backend/dist
+            backend/package.json
+            backend/package-lock.json
+          if-no-files-found: error
+
+      - name: Shranitev builda (frontend)
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: BuildManager/dist
+          if-no-files-found: error
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prenos kode
+        uses: actions/checkout@v7
+
+      - name: Namestitev Node.js in predpomnilnika paketov
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            BuildManager/package-lock.json
+
+      - name: Namestitev paketov (backend)
+        working-directory: backend
+        run: npm ci
+
+      - name: Namestitev paketov (frontend)
+        working-directory: BuildManager
+        run: npm ci
+
+      - name: Testi s pokritostjo (backend)
+        working-directory: backend
+        run: npm run test:coverage
+
+      - name: Testi s pokritostjo (frontend)
+        working-directory: BuildManager
+        run: npm run test:coverage
+
+      - name: Shranitev poročila o pokritosti
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: |
+            backend/coverage
+            BuildManager/coverage
+          if-no-files-found: error
