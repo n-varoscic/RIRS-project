@@ -125,6 +125,17 @@ Podatki za izračun stroška dela že obstajajo: vsak vnos ur hrani število ur 
 
 Pet od šestih MVP funkcionalnosti je implementiranih v celoti ali delno. Aplikacija je uporabna za evidenco projektov, zaposlenih in ur, ne pa še za spremljanje stroškov projekta.
 
+## Arhitektura in arhitekturne odločitve
+
+| Odločitev | Ali je upoštevana v kodi | Opomba |
+|---|---|---|
+| [ADR-0001](adr/0001-supabase-avtentikacija.md) Supabase Auth | ✅ | prijava poteka prek Supabase Auth (`authModel.ts`); backend ob vsakem zahtevku preveri žeton in poišče zaposlenega po `supabaseUid` (`requireEmployee`, `requireAdmin`); tabela `Zaposleni` gesel ne hrani |
+| [ADR-0002](adr/0002-poslovna-logika-na-backendu.md) poslovna logika na backendu | ✅ za implementirani del | validacije (ure, datumi, cena, e-pošta) in preverjanje vlog so na backendu, zato jih ni mogoče obiti s spremembo frontenda; izračun stroškov, donosnosti in računov, ki so glavni razlog za odločitev, še ni implementiran |
+| [ADR-0003](adr/0003-enostavna-arhitektura.md) enoten backend z ločenim frontendom | ✅ | `backend` (Express REST API, plasti `routes` → `middleware` → `controllers` → `models` s Prismo) in `BuildManager` (React) sta ločeni aplikaciji, ki ju je mogoče ločeno zagnati in namestiti |
+
+- [04 – Arhitektura in tehnološki sklad](04-arhitektura-in-tehnoloski-sklad.md) ni usklajen z ADR-0001 in kodo: za prijavo še opisuje Firebase Authentication in Firebase ID-token
+- Google Maps API je naveden v tehnološkem skladu, vendar še ni uporabljen; prikaz na zemljevidu (US-12) ni del MVP
+
 ## Predlogi izboljšav
 
 Predlogi ne izhajajo neposredno iz sprejemnih kriterijev, opaženi pa so bili pri uporabi.
@@ -146,4 +157,4 @@ Predlogi ne izhajajo neposredno iz sprejemnih kriterijev, opaženi pa so bili pr
 - Testnih podatkov ni, prvega administratorja je treba dodati ročno v Supabase Auth in tabelo `Zaposleni` (v README je to omenjeno le na kratko)
 - Registracija (`/register`) vrne »Registracija še ni implementirana.«; ker račune po zasnovi ustvarja administrator, to ni napaka MVP
 - [04 – Arhitektura in tehnološki sklad](04-arhitektura-in-tehnoloski-sklad.md) za prijavo še navaja Firebase Authentication, koda in [ADR-0001](adr/0001-supabase-avtentikacija.md) pa uporabljata Supabase Auth
-- Projekt nima avtomatskih testov
+- Projekt ob prevzemu ni imel avtomatskih testov; dodani so bili ob vzpostavitvi CI/CD (glej [README](../README.md#testi))

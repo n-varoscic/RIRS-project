@@ -1,5 +1,11 @@
 # BuildManager
 
+[![CI/CD](https://github.com/n-varoscic/RIRS-project/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/n-varoscic/RIRS-project/actions/workflows/ci-cd.yml)
+
+- **Aplikacija:** [buildmanager-rirs.netlify.app](https://buildmanager-rirs.netlify.app)
+- **Backend API:** [buildmanager-backend.onrender.com/api/health](https://buildmanager-backend.onrender.com/api/health)
+- Opis pipelina: [CI/CD](#cicd)
+
 BuildManager je interna spletna aplikacija za načrtovanje in spremljanje gradbenih projektov. Omogočala bo upravljanje projektov, zaposlenih in strank, dodeljevanje zaposlenih na projekte ter beleženje delovnih ur in porabljenega materiala.
 
 Na podlagi zbranih podatkov bo aplikacija samodejno izračunala stroške in donosnost projekta, omogočala generiranje računov ter prikaz lokacij projektov na zemljevidu. Dostop do funkcionalnosti bo prilagojen vlogam administratorja, projektnega vodje in delavca.
@@ -20,7 +26,7 @@ Podrobnejša projektna dokumentacija je na voljo v mapi [`docs`](docs/).
 
 Za lokalni zagon potrebuješ:
 
-- [Node.js](https://nodejs.org/) `20.19+` (uporabiš lahko tudi `22.12+`),
+- [Node.js](https://nodejs.org/) `22.22+`, `24.15+` ali `26+` (testi z Vitest starejših različic ne podpirajo; CI uporablja `26`),
 - npm
 
 Projekt je sestavljen iz dveh ločenih aplikacij:
@@ -126,6 +132,9 @@ Backend (v mapi `backend`):
 npm run dev              # razvojni strežnik
 npm run build            # generiranje Prisma odjemalca in TypeScript build
 npm start                # zagon predhodno zgrajenega backenda
+npm run lint             # preverjanje kode z ESLint
+npm test                 # testi (Vitest)
+npm run test:coverage    # testi s poročilom o pokritosti v mapi coverage/
 npx prisma db push       # uskladitev razvojne baze s Prisma shemo
 npm run prisma:generate  # generiranje Prisma odjemalca
 npm run prisma:pull      # posodobitev sheme iz obstoječe baze
@@ -135,8 +144,43 @@ npm run prisma:studio    # grafični pregled podatkov v bazi
 Frontend (v mapi `BuildManager`):
 
 ```bash
-npm run dev      # razvojni strežnik
-npm run build    # produkcijski build
-npm run lint     # preverjanje kode z ESLint
-npm run preview  # lokalni predogled produkcijskega builda
+npm run dev            # razvojni strežnik
+npm run build          # produkcijski build
+npm run lint           # preverjanje kode z ESLint
+npm run preview        # lokalni predogled produkcijskega builda
+npm test               # testi (Vitest)
+npm run test:coverage  # testi s poročilom o pokritosti v mapi coverage/
 ```
+
+### Testi
+
+- Backend (`backend/tests/`): testi controllerjev, modelov in zaščite po vlogah za uporabniške zgodbe US-01–US-06 in US-10; namesto prave baze in Supabase uporabljajo lažna objekta (`tests/fakes.ts`), zato ne potrebujejo `.env` ali interneta
+- Frontend (`BuildManager/tests/`): testi strani za prijavo, zaščite strani in menija glede na vlogo; komponente se izrišejo v lažnem brskalniku jsdom, klici na backend so nadomeščeni
+
+## CI/CD
+
+Pipeline je opisan v [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) in teče na GitHub Actions ob vsakem pull requestu v `main` in ob vsakem pushu na `main`. Vsaka sprememba gre najprej skozi preverjanje kode (lint), gradnjo in teste. Ko je sprememba združena v `main`, se zgrajena aplikacija samodejno objavi na Netlify (frontend) in Render (backend).
+
+| Job | Kdaj | Kaj naredi |
+|---|---|---|
+| `lint` | PR in push | ESLint za backend in frontend; napaka ustavi pipeline |
+| `build` | PR in push | build backenda in frontenda; mapi `dist` shrani kot artifacta `backend-dist` in `frontend-dist` |
+| `test` | PR in push | testi s pokritostjo za oba dela; poročilo shrani kot artifact `coverage-report` |
+| `deploy` | samo push na `main`, ko `lint`, `build` in `test` uspejo | artifacta iz joba `build` objavi brez ponovne gradnje |
+
+Deploy:
+
+- **Frontend** ([Netlify](https://buildmanager-rirs.netlify.app)): vsebina `frontend-dist` se naloži z Netlify CLI
+- **Backend** ([Render](https://buildmanager-backend.onrender.com/api/health)): vsebina `backend-dist` se brez ponovnega prevajanja zapakira v Docker sliko ([`backend/Dockerfile`](backend/Dockerfile)), ta se objavi v GitHub Container Registry (`ghcr.io/n-varoscic/buildmanager-backend`), Render pa jo prek deploy hooka prenese in zažene
+- Brezplačni Render strežnik po 15 minutah nedejavnosti zaspi, zato prvi zahtevek po premoru traja do ene minute
+
+Nastavitve na GitHubu:
+
+| Kje | Ime | Namen |
+|---|---|---|
+| Environment `production` (skrivnost) | `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID` | objava na Netlify |
+| Environment `production` (skrivnost) | `RENDER_DEPLOY_HOOK_URL` | sprožitev deploya na Render |
+| Spremenljivka repozitorija | `VITE_API_URL` | naslov backenda, ki ga Vite ob buildu vpiše v frontend |
+
+- Ključi za Supabase in bazo so nastavljeni samo v Render storitvi, ne v GitHubu
+- Veja `main` je zaščitena z rulesetom: spremembe so mogoče samo prek pull requesta, ki ga je mogoče združiti šele, ko so checki `lint`, `build` in `test` uspešni
